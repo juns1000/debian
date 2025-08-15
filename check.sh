@@ -4,7 +4,7 @@ CPU=$(top -bn1 | grep "Cpu(s)" | awk '{print 100 - $8"%"}')
 # MEM
 MEM=$(free | awk '/Mem/ {printf("%.1f%%", $3/$2 * 100)}')
 # DISK
-DISK=$(df -h | awk '$6=="/data" {print $5}')
+DISK=$(df -h | awk '$6=="/total/" {print $5}')
 # NET
 IFACE=eth0
 MAX_BPS=125000000

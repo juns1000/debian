@@ -36,13 +36,34 @@ cpu_sum=0
 mem_sum=0
 net_sum=0
 
+get_cpu_usage() {
+    # 读取第一次 CPU 数据
+    read -r cpu user nice system idle iowait irq softirq steal guest guest_nice < <(grep '^cpu ' /proc/stat)
+    total1=$((user + nice + system + idle + iowait + irq + softirq + steal))
+    idle1=$((idle + iowait))
+    
+    # 等待 1 秒
+    sleep 1
+    
+    # 读取第二次 CPU 数据
+    read -r cpu user nice system idle iowait irq softirq steal guest guest_nice < <(grep '^cpu ' /proc/stat)
+    total2=$((user + nice + system + idle + iowait + irq + softirq + steal))
+    idle2=$((idle + iowait))
+    
+    # 计算 CPU 使用率
+    total_diff=$((total2 - total1))
+    idle_diff=$((idle2 - idle1))
+    cpu_usage=$((100 * (total_diff - idle_diff) / total_diff))
+    echo $cpu_usage
+}
+
 for ((i=1; i<=SAMPLES; i++))
 do
     echo "第 $i/$SAMPLES 次采样..."
 
-    # CPU 使用率 (总平均，不分核心)
-    cpu=$(mpstat 1 1 | awk '/Average/ && $2 ~ /all/ {for(i=1;i<=NF;i++) if($i ~ /%idle/) {print 100 - $(i-1); exit}}')
-    cpu_sum=$(echo "$cpu_sum + $cpu" | bc)
+    # CPU 使用率
+    cpu=$(get_cpu_usage)
+    cpu_sum=$((cpu_sum + cpu))
 
     # 内存使用率
     mem=$(free | awk '/Mem/ {printf("%.1f", $3/$2 * 100)}')

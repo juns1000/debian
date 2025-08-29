@@ -1,7 +1,6 @@
 #!/bin/bash
 # 使用方法:
 #   ./monitor.sh --duration 300 --interval 10
-#   (表示总共采样 300 秒，每 10 秒一次)
 
 IFACE=eth0
 MAX_BPS=125000000   # 1Gbps
@@ -23,7 +22,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "未知参数: $1"
-      echo "用法: $0 --duration <秒> --interval <秒>"
       exit 1
       ;;
   esac
@@ -42,7 +40,6 @@ get_cpu_usage() {
     total1=$((user + nice + system + idle + iowait + irq + softirq + steal))
     idle1=$((idle + iowait))
     
-    # 等待 1 秒
     sleep 1
     
     # 第二次读取 CPU 时间
@@ -69,7 +66,7 @@ do
     mem=$(free | awk '/Mem/ {printf("%.1f", $3/$2 * 100)}')
     mem_sum=$(echo "$mem_sum + $mem" | bc)
 
-    # 磁盘使用率 (/ 根分区)
+    # 磁盘使用率
     disk=$(df -h / | awk 'NR==2 {print $5}')
 
     # 网络利用率
@@ -86,12 +83,13 @@ do
     sleep $((INTERVAL - 1))
 done
 
+# 计算平均值
 cpu_avg=$(echo "scale=2; $cpu_sum / $SAMPLES" | bc)
 mem_avg=$(echo "scale=2; $mem_sum / $SAMPLES" | bc)
 net_avg=$(echo "scale=2; $net_sum / $SAMPLES" | bc)
 
-echo "========== 平均值 (采样 ${DURATION} 秒, 每 ${INTERVAL} 秒一次) =========="
+echo "========== 平均值 =========="
 echo "CPU Usage: ${cpu_avg}%"
 echo "Memory Usage: ${mem_avg}%"
-echo "Disk Usage (/): $disk"
-echo "Net Usage ($IFACE): ${net_avg}%"
+echo "Disk Usage: $disk"
+echo "Net Usage: ${net_avg}%"

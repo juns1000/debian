@@ -1,72 +1,29 @@
 #!/bin/bash
-# 使用方法:
-#   ./monitor.sh --duration 300 --interval 10
+# 采样 10 次，每次间隔 10 秒，算平均值
 
 IFACE=eth0
 MAX_BPS=125000000   # 1Gbps
 
-# 默认参数
-DURATION=300
-INTERVAL=10
-
-# 解析命令行参数
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --duration)
-      DURATION="$2"
-      shift 2
-      ;;
-    --interval)
-      INTERVAL="$2"
-      shift 2
-      ;;
-    *)
-      echo "未知参数: $1"
-      exit 1
-      ;;
-  esac
-done
-
-# 计算采样次数
-SAMPLES=$(( DURATION / INTERVAL ))
+samples=10
+interval=10
 
 cpu_sum=0
 mem_sum=0
 net_sum=0
 
-get_cpu_usage() {
-    # 第一次读取 CPU 时间
-    read -r cpu user nice system idle iowait irq softirq steal guest guest_nice < <(grep '^cpu ' /proc/stat)
-    total1=$((user + nice + system + idle + iowait + irq + softirq + steal))
-    idle1=$((idle + iowait))
-    
-    sleep 1
-    
-    # 第二次读取 CPU 时间
-    read -r cpu user nice system idle iowait irq softirq steal guest guest_nice < <(grep '^cpu ' /proc/stat)
-    total2=$((user + nice + system + idle + iowait + irq + softirq + steal))
-    idle2=$((idle + iowait))
-    
-    # 计算 CPU 使用率
-    total_diff=$((total2 - total1))
-    idle_diff=$((idle2 - idle1))
-    cpu_usage=$((100 * (total_diff - idle_diff) / total_diff))
-    echo "$cpu_usage"
-}
-
-for ((i=1; i<=SAMPLES; i++))
+for ((i=1; i<=samples; i++))
 do
-    echo "第 $i/$SAMPLES 次采样..."
+    echo "第 $i 次采样..."
 
-    # CPU 使用率
-    cpu=$(get_cpu_usage)
-    cpu_sum=$((cpu_sum + cpu))
+    # CPU 使用率 (总平均，不分核心) - 使用 mpstat 更准确
+    cpu=$(mpstat 1 1 | awk '/Average/ && $2 ~ /all/ {print 100 - $12}')
+    cpu_sum=$(echo "$cpu_sum + $cpu" | bc)
 
     # 内存使用率
     mem=$(free | awk '/Mem/ {printf("%.1f", $3/$2 * 100)}')
     mem_sum=$(echo "$mem_sum + $mem" | bc)
 
-    # 磁盘使用率
+    # 磁盘使用率 (/ 根分区)
     disk=$(df -h / | awk 'NR==2 {print $5}')
 
     # 网络利用率
@@ -80,16 +37,15 @@ do
     net_sum=$(echo "$net_sum + $net" | bc)
 
     echo "当前值 => CPU: ${cpu}% | MEM: ${mem}% | DISK: $disk | NET: ${net}%"
-    sleep $((INTERVAL - 1))
+    sleep $interval
 done
 
-# 计算平均值
-cpu_avg=$(echo "scale=2; $cpu_sum / $SAMPLES" | bc)
-mem_avg=$(echo "scale=2; $mem_sum / $SAMPLES" | bc)
-net_avg=$(echo "scale=2; $net_sum / $SAMPLES" | bc)
+cpu_avg=$(echo "scale=2; $cpu_sum / $samples" | bc)
+mem_avg=$(echo "scale=2; $mem_sum / $samples" | bc)
+net_avg=$(echo "scale=2; $net_sum / $samples" | bc)
 
-echo "========== 平均值 =========="
+echo "========== ${samples} 次采样后的平均值 =========="
 echo "CPU Usage: ${cpu_avg}%"
 echo "Memory Usage: ${mem_avg}%"
-echo "Disk Usage: $disk"
-echo "Net Usage: ${net_avg}%"
+echo "Disk Usage (/): $disk"
+echo "Net Usage ($IFACE): ${net_avg}%"

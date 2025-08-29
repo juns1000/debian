@@ -41,7 +41,7 @@ do
     echo "第 $i/$SAMPLES 次采样..."
 
     # CPU 使用率 (总平均，不分核心)
-    cpu=$(mpstat 1 1 | awk '/Average/ && $2 ~ /all/ {print 100 - $12}')
+    cpu=$(mpstat 1 1 | awk '/Average/ && $2 ~ /all/ {for(i=1;i<=NF;i++) if($i ~ /%idle/) {print 100 - $(i-1); exit}}')
     cpu_sum=$(echo "$cpu_sum + $cpu" | bc)
 
     # 内存使用率
